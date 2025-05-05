@@ -24,12 +24,18 @@ grid_gdf = gpd.GeoDataFrame(
 )
 
 # Step 4: Load borough shapefile
-nyc = gpd.read_file("nybb.shp")
+nyc = gpd.read_file("project_3/src/nybb.shp")
 manhattan = nyc[nyc['BoroName'].str.lower() == 'manhattan'].to_crs("EPSG:4326")
+
 
 # Step 5: Filter grid points within Manhattan
 manhattan_polygon = manhattan.geometry.union_all()
 points_in_manhattan = grid_gdf[grid_gdf.geometry.within(manhattan_polygon)].copy()
+
+points_in_manhattan['longitude'] = points_in_manhattan.geometry.x
+points_in_manhattan['latitude'] = points_in_manhattan.geometry.y
+
+points_in_manhattan[['longitude', 'latitude']].to_csv("project_3/data/manhattan_grid_points.csv", index=False)
 
 # Step 6: Load and clean Airbnb data
 df = pd.read_excel("../data/Airbnb_clean_dist_cent_sub.xlsx")

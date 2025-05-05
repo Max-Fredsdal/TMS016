@@ -177,23 +177,32 @@ def predict_missing_data(L, residuals, K_mo, X_miss, beta_hat):
     return r_m_hat
 
 
-def read_data_from_csv(csv_file):
-    """
-    Reads the data from a CSV file containing point values, latitude, longitude, and covariates.
-    
-    Args:
-    - csv_file (str): Path to the CSV file containing the data.
-    
-    Returns:
-    - points (np.ndarray): 2D array of points (latitude, longitude).
-    - values (np.ndarray): 1D array of values corresponding to each point.
-    - covariates (np.ndarray): 2D array of covariates (if any).
-    """
-    data = pd.read_csv(csv_file)
-    
-    # Extract coordinates, values, and covariates (adjust columns as needed)
-    points = data[['latitude', 'longitude']].values
-    values = data['value'].values
-    covariates = data.drop(columns=['latitude', 'longitude', 'value']).values  # Optional: remove if no covariates
-    
-    return points, values, covariates
+def read_data_from_csv(path_obs, path_miss, covariates=None):
+    import numpy as np
+    import pandas as pd
+
+    # Load data
+    data_obs = pd.read_csv(path_obs)
+    data_miss = pd.read_csv(path_miss)
+
+
+    # Extract training data (observed)
+    points_obs = data_obs[['latitude', 'longitude']].values
+    values_obs = data_obs['price'].values
+
+    # Handle covariates: if provided, extract them; if not, return empty 2D array
+    if covariates is not None and len(covariates) > 0:
+        covariates_obs = data_obs[covariates].values
+    else:
+        covariates_obs = np.empty((len(data_obs), 0))  # shape (n_samples, 0)
+
+    # Extract prediction points (missing)
+    points_miss = data_miss[['latitude', 'longitude']].values
+
+    # Handle covariates: if provided, extract them; if not, return empty 2D array
+    if covariates is not None and len(covariates) > 0:
+        covariates_miss = data_miss[covariates].values
+    else:
+        covariates_miss = np.empty((len(data_miss), 0))  # shape (n_samples, 0)
+
+    return points_obs, values_obs, covariates_obs, points_miss, covariates_miss

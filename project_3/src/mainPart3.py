@@ -3,7 +3,6 @@ from helper import*
 
 ######################## Controls ###############################################
 
-plot_missing = False # Set to True to plot the missing data mask
 plot_variogram = True  # Set to True to plot the empirical and fitted variograms
 
 n_sample = 10000  # Number of pixels to sample (change this value)
@@ -29,44 +28,6 @@ def main():
     # Identify missing points (remaining points)
     missing_idx = np.delete(points, sampled_idx, axis=0)
 
-
-    ### THIS CODE IS FOR PART 1 and is not generalizable to other data ############################
-    x_titan = imageio.imread('project_3/data/titan.jpg')  # Update with the correct path
-    x_titan_norm = x_titan / 255.0
-    image = x_titan_norm
-    n, m = image.shape
-
-    n_sample = 10000  # Specify the exact number of pixels to sample (change this value)
-
-    all_idx = np.array(np.unravel_index(np.arange(n * m), (n, m))).T  # Shape: (n*m, 2)
-
-    sampled_idx = all_idx[np.random.choice(all_idx.shape[0], size=n_sample, replace=False)]
-
-    mask = np.zeros((n, m), dtype=bool)
-    mask[sampled_idx[:, 0], sampled_idx[:, 1]] = True
-
-    observed_values = image[mask].flatten()
-
-    observed_idx = np.argwhere(mask)
-    missing_idx = np.argwhere(~mask)
-    ################################################3
-
-
-    # Visualize the mask
-    if plot_missing:
-        plt.figure(figsize=(8, 8))
-        plt.subplot(1, 2, 1)
-        plt.title("Original Image")
-        plt.imshow(image, cmap='gray')
-        plt.axis('off')
-
-        plt.subplot(1, 2, 2)
-        plt.title(f"Masked Image ({n_sample} Pixels Sampled)")
-        plt.imshow(np.where(mask, image, np.nan), cmap='gray')
-        plt.axis('off')
-
-        plt.show()
-
     # Compute the empirical variogram from observed data
     emp_variogram_result = emp_variogram(observed_idx, observed_values, N=100)
 
@@ -90,7 +51,7 @@ def main():
 
     # add nugget to K_oo for numerical stability
     K_oo += 1e-6 * np.eye(K_oo.shape[0])
-
+   
     # Define feature matrix
     B_obs = np.hstack((np.ones((observed_idx.shape[0], 1)), observed_idx, covariates[sampled_idx]))
     B_miss = np.hstack((np.ones((missing_idx.shape[0], 1)), missing_idx, covariates[~np.isin(points[:, 0], observed_idx[:, 0])]))

@@ -6,8 +6,5 @@ scikit-learn
 pandas
 openpyxl
 numpy
-pandas
 geopandas
 shapely
-matplotlib
-scipy

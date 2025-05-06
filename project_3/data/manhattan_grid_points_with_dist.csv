@@ -1,4 +1,4 @@
-longitude,latitude,dist_center_km,dist_nearest_station_km
+longitude,latitude,distance_to_center_km,distance_to_station_km
 -73.9994999999999,40.7,7.4725,0.6097
 -73.9989999999999,40.7,7.4633,0.5727
 -74.01349999999996,40.700500000000005,7.7671,0.1552

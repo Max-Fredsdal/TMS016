@@ -7,43 +7,89 @@ from scipy.optimize import minimize
 from scipy.special import kv, gamma
 from sklearn.gaussian_process.kernels import Matern as SklearnMatern
 import pandas as pd
+import geopandas as gpd
+from shapely.geometry import Point
 
+# def emp_variogram(D, data, N):
+#     """
+#     Computes a binned estimate of the semivariogram for spatial data.
+    
+#     Parameters:
+#     D    : Measurement locations (n x 2) matrix or distance matrix (n x n).
+#     data : The measurements (n x 1 vector).
+#     N    : The number of bins.
+    
+#     Returns:
+#     out  : A dictionary containing:
+#         - 'variogram' : The estimated semivariogram.
+#         - 'h'         : The center points for each bin.
+#         - 'N'         : Number of lags in each bin.
+#     """
+#     data = data.flatten()
 
+#     if D.shape[0] != D.shape[1]:
+#         D = squareform(pdist(D))  # Convert pairwise distances to a squareform matrix
+#     max_dist = np.max(D)  # Maximum distance
+#     d = np.linspace(0, max_dist, N)  # Bin edges (N bins)
+    
+#     # Initialize output dictionary
+#     out = {'h': (d[1:] + d[:-1]) / 2,  # Bin centers
+#            'variogram': np.zeros(N-1),  # Variogram values
+#            'N': np.zeros(N-1)}  # Number of pairs in each bin
+    
+#     # Compute the semivariogram for each bin
+#     for i in range(N-1):
+#         mask = np.triu((D > d[i]) & (D <= d[i+1]), k=1)  # Find indices where distances are in the current bin
+#         I, J = np.where(mask)  # Find indices of pairs
+#         out['N'][i] = len(I)  # Number of pairs in the current bin
+        
+#         if len(I) > 0:  # Avoid division by zero
+#             out['variogram'][i] = 0.5 * np.mean((data[J] - data[I]) ** 2)
+    
+#     return out
 def emp_variogram(D, data, N):
     """
-    Computes a binned estimate of the semivariogram for spatial data.
-    
+    Computes a binned estimate of the empirical semivariogram for spatial data.
+
     Parameters:
-    D    : Measurement locations (n x 2) matrix or distance matrix (n x n).
-    data : The measurements (n x 1 vector).
-    N    : The number of bins.
-    
+    D    : (n x 2) array of coordinates or (n x n) distance matrix.
+    data : (n,) or (n x 1) array of measurements.
+    N    : Number of bins.
+
     Returns:
-    out  : A dictionary containing:
-        - 'variogram' : The estimated semivariogram.
-        - 'h'         : The center points for each bin.
-        - 'N'         : Number of lags in each bin.
+    out  : Dictionary with:
+        - 'variogram': Estimated semivariogram values.
+        - 'h'        : Bin centers.
+        - 'N'        : Number of point pairs in each bin.
     """
+    data = np.asarray(data).flatten()
+
     if D.shape[0] != D.shape[1]:
-        D = squareform(pdist(D))  # Convert pairwise distances to a squareform matrix
-    max_dist = np.max(D)  # Maximum distance
-    d = np.linspace(0, max_dist, N)  # Bin edges (N bins)
-    
-    # Initialize output dictionary
-    out = {'h': (d[1:] + d[:-1]) / 2,  # Bin centers
-           'variogram': np.zeros(N-1),  # Variogram values
-           'N': np.zeros(N-1)}  # Number of pairs in each bin
-    
-    # Compute the semivariogram for each bin
+        # Assume D is (n, 2) lon/lat coordinates in EPSG:4326
+        gdf = gpd.GeoDataFrame(geometry=[Point(xy) for xy in D], crs="EPSG:4326")
+        gdf = gdf.to_crs("EPSG:2263")  # Project to NY State Plane (meters)
+        projected_coords = np.array([[p.x, p.y] for p in gdf.geometry])
+        D = squareform(pdist(projected_coords))  # Compute distance matrix in meters
+
+    max_dist = np.max(D)
+    min_dist = max(np.min(D[np.triu_indices_from(D, k=1)]), 50)
+    d = np.linspace(min_dist, max_dist, N)
+    h = (d[:-1] + d[1:]) / 2
+
+    variogram = np.zeros(N-1)
+    counts = np.zeros(N-1)
+
     for i in range(N-1):
-        mask = (D > d[i]) & (D <= d[i+1])  # Find indices where distances are in the current bin
-        I, J = np.where(mask)  # Find indices of pairs
-        out['N'][i] = len(I)  # Number of pairs in the current bin
-        
-        if len(I) > 0:  # Avoid division by zero
-            out['variogram'][i] = 0.5 * np.mean((data[I] - data[J]) ** 2)
-    
-    return out
+        # Avoid duplicate pairs and self-pairs
+        mask = np.triu((D > d[i]) & (D <= d[i+1]), k=1)
+        I, J = np.where(mask)
+        counts[i] = len(I)
+
+        if len(I) > 0:
+            diff_sq = (data[I] - data[J]) ** 2
+            variogram[i] = 0.5 * np.mean(diff_sq)
+
+    return {'h': h, 'variogram': variogram, 'N': counts}
 
 import numpy as np
 from scipy.special import kv, gamma
@@ -177,32 +223,41 @@ def predict_missing_data(L, residuals, K_mo, X_miss, beta_hat):
     return r_m_hat
 
 
-def read_data_from_csv(path_obs, path_miss, covariates=None):
+def read_data_from_csv(path_obs, path_miss, covariates=None, target_class=None):
     import numpy as np
     import pandas as pd
 
-    # Load data
-    data_obs = pd.read_csv(path_obs)
-    data_miss = pd.read_csv(path_miss)
+    # Specify high precision for lat/lon
+    dtype_override = {
+        'latitude': 'float64',
+        'longitude': 'float64'
+    }
 
+    # Load data with high precision for lat/lon
+    data_obs = pd.read_csv(path_obs, dtype=dtype_override)
+    data_miss = pd.read_csv(path_miss, dtype=dtype_override)
+
+    # Optional filtering by class
+    if target_class is not None:
+        data_obs = data_obs[data_obs['room type'] == target_class]
 
     # Extract training data (observed)
-    points_obs = data_obs[['latitude', 'longitude']].values
+    points_obs = data_obs[['latitude', 'longitude']].values.astype(np.float64)
     values_obs = data_obs['price'].values
 
-    # Handle covariates: if provided, extract them; if not, return empty 2D array
+    # Handle covariates
     if covariates is not None and len(covariates) > 0:
         covariates_obs = data_obs[covariates].values
     else:
-        covariates_obs = np.empty((len(data_obs), 0))  # shape (n_samples, 0)
+        covariates_obs = np.empty((len(data_obs), 0))
 
     # Extract prediction points (missing)
-    points_miss = data_miss[['latitude', 'longitude']].values
+    points_miss = data_miss[['latitude', 'longitude']].values.astype(np.float64)
 
-    # Handle covariates: if provided, extract them; if not, return empty 2D array
     if covariates is not None and len(covariates) > 0:
         covariates_miss = data_miss[covariates].values
     else:
-        covariates_miss = np.empty((len(data_miss), 0))  # shape (n_samples, 0)
+        covariates_miss = np.empty((len(data_miss), 0))
 
     return points_obs, values_obs, covariates_obs, points_miss, covariates_miss
+

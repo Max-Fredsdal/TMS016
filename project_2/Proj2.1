@@ -1,0 +1,94 @@
+%1. Test segmenting the image into two classes using
+%• the K-means algorithm,
+%• a Gaussian mixture model, and
+%• a Markov random field mixture model.
+%Plot the data and the respective segmentations
+
+load("permeability.mat")
+Y = double(Y);
+[m,n] = size(Y);
+x = Y(:);
+K = 2;
+
+
+
+%%%%%%%%%
+%K-means
+%%%%%%%%%
+
+iter_k = 100;
+verbose_k = 1;
+
+[idx_kmeans, pars_kmeans] = normmix_kmeans(x,K,iter_k,verbose_k);
+kmeans_segmented = reshape(idx_kmeans,m,n);
+
+if mean(Y(kmeans_segmented==1),'all') > mean(Y(kmeans_segmented==2),'all')
+    kmeans_segmented = 3-kmeans_segmented;         
+end
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%Gaussian mixture model
+%%%%%%%%%%%%%%%%%%%%%%%
+
+
+Niter_gmm = 1000;
+step0_gmm = 0.05;
+plotflag_gmm=0;
+
+[pars_gmm, traj_gmm] = normmix_sgd(x, K, Niter_gmm, step0_gmm, plotflag_gmm);
+[cl_gmm, p_gmm] = normmix_classify(x, pars_gmm);
+
+gmm_segmented = reshape(cl_gmm, m, n);
+
+
+if mean(Y(gmm_segmented==1),'all') > mean(Y(gmm_segmented==2),'all')
+    gmm_segmented = 3-gmm_segmented;        
+end
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Markov random field mixture
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+   
+
+[theta_mrfm, alpha_mrfm, beta_mrfm, cl_mrfm, p_mrfm] = mrf_sgd(Y,K,struct());
+mrfm_segmented = cl_mrfm;
+
+
+if mean(Y(mrfm_segmented==1),'all') > mean(Y(mrfm_segmented==2),'all')
+    mrfm_segmented = 3-mrfm_segmented;         
+end
+
+
+
+
+%%%%%%%%%%%%%
+% PLOT
+%%%%%%%%%%%%%
+
+figure
+subplot(2,2,1);           
+imagesc(Y); 
+title('Original')
+axis image off;
+
+subplot(2,2,2); imagesc(kmeans_segmented);
+title("K-means");
+axis image off; 
+
+subplot(2,2,3); imagesc(gmm_segmented);
+title("Gaussian mixture model");
+axis image; 
+
+subplot(2,2,4); imagesc(mrfm_segmented);
+title("Markov random field mixture model");
+axis image off; 
+
+
+

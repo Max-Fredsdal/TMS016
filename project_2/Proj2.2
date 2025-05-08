@@ -1,0 +1,85 @@
+%%%%%%%%%%
+% PART 2 %
+%%%%%%%%%%
+
+load("permeability.mat")
+sigma = 1; % Try 1 and 3                   
+Y     = double(Y);
+[m,n] = size(Y);                   
+nY    = Y + sigma*randn(m,n);      
+nx    = nY(:);                     
+nK    = 2;
+
+%%%%%%%%%
+%K-means noisy
+%%%%%%%%%
+
+niter_k = 100;
+nverbose_k = 1;
+
+[nidx_kmeans, npars_kmeans] = normmix_kmeans(nx,nK,niter_k,nverbose_k);
+nkmeans_segmented = reshape(nidx_kmeans,m,n);
+
+if mean(Y(nkmeans_segmented==1),'all') > mean(Y(nkmeans_segmented==2),'all')
+    nkmeans_segmented = 3-nkmeans_segmented;         
+end
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%Gaussian mixture model noisy
+%%%%%%%%%%%%%%%%%%%%%%%
+
+
+nNiter_gmm = 100;
+nstep0_gmm = 0.1;
+nplotflag_gmm=0;
+
+[npars_gmm, ntraj_gmm] = normmix_sgd(nx, nK, nNiter_gmm, nstep0_gmm, nplotflag_gmm);
+[ncl_gmm, np_gmm] = normmix_classify(nx, npars_gmm);
+
+ngmm_segmented = reshape(ncl_gmm, m, n);
+
+
+if mean(Y(ngmm_segmented==1),'all') > mean(Y(ngmm_segmented==2),'all')
+    ngmm_segmented = 3-ngmm_segmented;         
+end
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Markov random field mixture noisy
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+[ntheta_mrfm, nalpha_mrfm, nbeta_mrfm, ncl_mrfm, np_mrfm] = mrf_sgd(nY,nK,struct());
+nmrfm_segmented = ncl_mrfm;
+
+if mean(Y(nmrfm_segmented==1),'all') > mean(Y(nmrfm_segmented==2),'all')
+    nmrfm_segmented = 3-nmrfm_segmented;         
+end
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Plot noisy
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+figure
+subplot(2,2,1);           
+imagesc(nY); 
+title('Original noisy')
+axis image;
+
+subplot(2,2,2); imagesc(nkmeans_segmented);
+title("K-means noisy");
+axis image; 
+
+subplot(2,2,3); imagesc(ngmm_segmented);
+title("Gaussian mixture model noisy");
+axis image; 
+
+subplot(2,2,4); imagesc(nmrfm_segmented);
+title("Markov random field mixture model noisy");
+axis image; 
+
